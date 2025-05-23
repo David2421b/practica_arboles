@@ -1,64 +1,5 @@
 import random
-
-class Node:
-    def __init__(self, value):
-        self.value = value
-        self.children = []
-
-    def _repr(self, level = 0):
-        result = "  " * level + f"{self.value}\n"
-        for child in self.children:
-            result += child._repr(level + 1)
-        return result
-
-    def __repr__(self):
-        return self._repr()
-
-
-class GeneralTree:
-    def __init__(self, root: Node = None):
-        self.root = root
-
-    def insert(self, parent, child, current_node = None):
-        if current_node is None:
-            current_node = self.root
-
-        if self.root is None:
-            parent = Node(parent)
-            child = Node(child)
-            parent.children.append(child)
-            self.root = parent
-            return True
-        
-        if current_node.value == parent:
-            current_node.children.append(Node(child))
-            return True
-
-        for i in current_node.children:
-            if(self.insert(parent, child, i) == True):
-                return True
-        return False
-
-    def buscar(self, value, current_node = None):
-        if current_node is None:
-            current_node = self.root
-
-        if value == current_node.value:
-            return True
-        
-        for i in current_node.children:
-            if (self.buscar(value, i) == True):
-                return True
-            
-        return False
-
-
-class Personita:
-    def __init__(self):
-        self.simbolo = "🚶"
-        self.posicion = []
-
-
+import os
 class Celda:
     def __init__(self, elemento = ""):
         self.elemento: str = elemento
@@ -90,22 +31,176 @@ class Laberinto:
             for fila in self.laberinto_obj:
                 laberinto_format += " | ".join(str(celda) if celda.elemento else "  " for celda in fila) + "\n"
             return laberinto_format
+
+class Personita:
+    def __init__(self):
+        self.simbolo = "🚶"
+        self.posicion = []
+        self.movimientos = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        self.arbol: GeneralTree = None
+        self.retraso = False
+
+    def iniciar_arbol(self, laberinto: Laberinto):
+        self.arbol = GeneralTree(Node(tuple(self.posicion)))
+    
+    def mover_por_ruta(self, laberinto: Laberinto):
+        flag = True
+        
+        if not self.arbol or not self.arbol.ruta_mas_corta:
+            print("¡Ay Muchachos!!!!")
+            return False
+        
+        if self.retraso:
+            self.retraso = False
+            return True
+
+        fila, columna = self.posicion
+        laberinto.laberinto_obj[fila][columna].elemento = ""
+        self.ruta = self.arbol.ruta_mas_corta[1:]  
+
+        for _ in self.ruta:
+            if laberinto.laberinto_obj[fila][columna].elemento == "":
+                laberinto.laberinto_obj[fila][columna].elemento = "👣"
+
+        for paso in self.ruta:
+
+            fila, columna = paso
+            self.posicion = [fila, columna]
+            elemento_destino = laberinto.laberinto_obj[fila][columna].elemento
+
+            if elemento_destino == "T ":
+                movimiento_a_eliminar = random.choice(self.movimientos)
+                self.movimientos.remove(movimiento_a_eliminar)
+                print(self.movimientos)
+
+            elif elemento_destino == "R ":
+                self.retraso = True
             
+            elif elemento_destino == "🏁":
+                laberinto.laberinto_obj[fila][columna].elemento = f"🏁{self.simbolo}"
+                print(f"    \nFelicidades saliste\n")
+                flag = -1
+                break
+
+            laberinto.laberinto_obj[fila][columna].elemento = self.simbolo
+            break
+        return flag
+
+
+class Node:
+    def __init__(self, value):
+        self.value = value
+        self.children = []
+
+    def _repr(self, level = 0):
+        result = "  " * level + f"{self.value}\n"
+        for child in self.children:
+            result += child._repr(level + 1)
+        return result
+
+    def __repr__(self):
+        return self._repr()
+
+
+class GeneralTree:
+    def __init__(self, root: Node = None):
+        self.root = root
+        self.ruta_mas_corta = []
+
+    def insert(self, parent, child, current_node = None):
+        if current_node is None:
+            current_node = self.root
+
+        if self.root is None:
+            parent = Node(parent)
+            child = Node(child)
+            parent.children.append(child)
+            self.root = parent
+            return True
+        
+        if current_node.value == parent:
+            current_node.children.append(Node(child))
+            return True
+
+        for i in current_node.children:
+            if(self.insert(parent, child, i) == True):
+                return True
+        return False
+    
+    def buscar_salida(self, laberinto: Laberinto, persona: Personita, nodo_actual=None, visitados=None, ruta_actual=None):
+        if self.root is None:
+            self.root = Node(tuple(persona.posicion))
+
+        if nodo_actual is None:
+            nodo_actual = self.root
+        if visitados is None:
+            visitados = set()
+        if ruta_actual is None:
+            ruta_actual = []
+
+        fila, columna = nodo_actual.value
+
+        if (fila, columna) in visitados:
+            return
+
+        visitados.add((fila, columna))
+        ruta_actual.append((fila, columna))
+
+        celda_actual = laberinto.laberinto_obj[fila][columna].elemento
+
+        if celda_actual == "🏁":
+            if not self.ruta_mas_corta or len(ruta_actual) < len(self.ruta_mas_corta):
+                self.ruta_mas_corta = list(ruta_actual)
+            ruta_actual.pop()
+            visitados.remove((fila, columna))
+            return
+
+        for dx, dy in persona.movimientos:
+            nueva_fila, nueva_columna = fila + dx, columna + dy
+
+            if 0 <= nueva_fila < laberinto.tamaño and 0 <= nueva_columna < laberinto.tamaño:
+                nueva_celda = laberinto.laberinto_obj[nueva_fila][nueva_columna].elemento
+                if nueva_celda not in ["B ", persona.simbolo] and (nueva_fila, nueva_columna) not in visitados:
+                    nuevo_nodo = Node((nueva_fila, nueva_columna))
+                    nodo_actual.children.append(nuevo_nodo)
+                    self.buscar_salida(laberinto, persona, nuevo_nodo, visitados, ruta_actual)
+
+        ruta_actual.pop()
+        visitados.remove((fila, columna))
+
 class MazeOfTerror:
+    def limpiar_terminal(self):
+        os.system('cls' if os.name == 'nt' else 'clear')
 
     def iniciar_laberitno(self, numero_personas = 1):
-        tamaño_laberinto = int(input("Ingresa el tamaño de la matriz NxN: "))
+        tamaño_laberinto = random.randint(5, 7)
         self.mi_laberinto = Laberinto(tamaño = tamaño_laberinto)
         self.mi_laberinto.crear_matriz()
+        self.lista_personitas = []
 
         self.colocar_persona(tamaño_laberinto, numero_personas)
         self.asignar_salida()
 
-        if tamaño_laberinto <= 5:
+        if tamaño_laberinto == 5:
             for _ in range(3):
                 self.colocar_bloqueos()
                 self.colocar_retrasadores()
                 self.colocar_trampas()
+            return
+        
+        elif tamaño_laberinto == 6:
+            for _ in range(5):
+                self.colocar_bloqueos()
+                self.colocar_retrasadores()
+                self.colocar_trampas()
+            return
+        
+        elif tamaño_laberinto == 7:
+            for _ in range(9):
+                self.colocar_bloqueos()
+                self.colocar_retrasadores()
+                self.colocar_trampas()
+            return
     
     def asignar_salida(self):
         flag_posicion = True
@@ -133,6 +228,7 @@ class MazeOfTerror:
                 if self.mi_laberinto.laberinto_obj[fila][columna].elemento == "":
                     flag_posicion = False
             
+            self.lista_personitas.append(personita)
             celda = self.mi_laberinto.laberinto_obj[fila][columna]
             personita.posicion.extend([fila, columna])
             celda.elemento = personita.simbolo
@@ -181,10 +277,11 @@ class MazeOfTerror:
 
     def menu(self):
         flag_ciclo = True
-        flag_imprimir = False
+        self.flag_imprimir = False
 
         while flag_ciclo:
-            if flag_imprimir:
+            self.limpiar_terminal()
+            if self.flag_imprimir:
                 print(self.mi_laberinto)
             try:
                 print("\n🧭 Menú Interactivo")
@@ -196,7 +293,11 @@ class MazeOfTerror:
                 print("6.   Salir del juego")
                 eleccion = int(input("Selecciona: "))
                 flag_ciclo = self.elegir_accion(eleccion)
-                flag_imprimir = True
+                self.flag_imprimir = True
+
+                if flag_ciclo == -1:
+                    print(self.mi_laberinto)
+                    flag_ciclo = False
             
             except Exception as e:
                 print("Por favor inicia el laberinto (opcion 1.)")
@@ -206,8 +307,7 @@ class MazeOfTerror:
     def elegir_accion(self, eleccion: int):
         match eleccion:
             case 1:
-                numero_personas = int(input("Ingrese el numero de personas: "))
-                self.iniciar_laberitno(numero_personas)
+                self.iniciar_laberitno()
                 return True
 
             case 2:
@@ -221,6 +321,13 @@ class MazeOfTerror:
             case 4:
                 self.colocar_retrasadores()
                 return True
+            
+            case 5:
+                for persona in self.lista_personitas:
+                    persona.iniciar_arbol(self.mi_laberinto)
+                    persona.arbol.buscar_salida(self.mi_laberinto, persona)
+                    flag = persona.mover_por_ruta(self.mi_laberinto)                    
+                return flag
             
             case 6:
                 return False
